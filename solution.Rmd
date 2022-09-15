@@ -1,0 +1,240 @@
+---
+title: "Cyclist Ride Data Analysis with R"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Installing and Loading Packages
+
+Following packages helps in smoothening the process of out analysis.
+
+```{r Load Libraries, message=FALSE, warning=FALSE}
+# load for data analysis and date-time
+library("tidyverse")
+library("lubridate")
+
+# makes data cleaning task easier
+library("here")
+library("skimr")
+library("janitor")
+
+```
+
+
+## 2. Collect Data
+
+Downloaded the last 12 months dataset and stored the .csv file within the following variables:
+
+```{r Datasets, message=FALSE, warning=FALSE, results='hide'}
+# load dataset
+trips_2022_06 <- read_csv("trips_2022_06.csv")
+trips_2022_05 <- read_csv("trips_2022_05.csv")
+trips_2022_04 <- read_csv("trips_2022_04.csv")
+trips_2022_03 <- read_csv("trips_2022_03.csv")
+trips_2022_02 <- read_csv("trips_2022_02.csv")
+trips_2022_01 <- read_csv("trips_2022_01.csv")
+trips_2021_12 <- read_csv("trips_2021_12.csv")
+trips_2021_11 <- read_csv("trips_2021_11.csv")
+trips_2021_10 <- read_csv("trips_2021_10.csv")
+trips_2021_09 <- read_csv("trips_2021_09.csv")
+trips_2021_08 <- read_csv("trips_2021_08.csv")
+trips_2021_07 <- read_csv("trips_2021_07.csv")
+
+```
+
+
+## Process Data to Analyze
+
+First checking consistency in column names of the loaded dataframe. If dataframes have varying column names, then, rename them - make them consistence before creating a one-in-all dataframe by combining them all.
+
+```{r Column Names, message=FALSE, warning=FALSE, results='hide'}
+# checking consistency in colnames
+colnames(trips_2022_06)
+colnames(trips_2022_05)
+colnames(trips_2022_04)
+colnames(trips_2022_03)
+colnames(trips_2022_02)
+colnames(trips_2022_01)
+colnames(trips_2021_12)
+colnames(trips_2021_11)
+colnames(trips_2021_10)
+colnames(trips_2021_09)
+colnames(trips_2021_08)
+colnames(trips_2021_07)
+```
+
+So all dataframe have the same column names, i.e, they are consistence. Therefore, we can create a one-in-all dataframe by stacking one over another. Hence, creating a dataframe with data of past 12 months.
+
+Now, inspecting the dataframes and look for incongruencies using str() command.
+
+```{r Structure, message=FALSE, warning=FALSE, results='hide'}
+# checking structure of dataframes
+str(trips_2022_06)
+str(trips_2022_05)
+str(trips_2022_04)
+str(trips_2022_03)
+str(trips_2022_02)
+str(trips_2022_01)
+str(trips_2021_12)
+str(trips_2021_11)
+str(trips_2021_10)
+str(trips_2021_09)
+str(trips_2021_08)
+str(trips_2021_07)
+```
+
+Stacking the dataframe to create one-in-all dataframe.
+
+```{r One-in-All Dataframe, message=FALSE, warning=FALSE}
+# Stack individual month's data frames into one big data frame
+all_trips <- bind_rows(trips_2022_06, trips_2022_05,
+                       trips_2022_04, trips_2022_03,
+                       trips_2022_02, trips_2022_01,
+                       trips_2021_12, trips_2021_11,
+                       trips_2021_10, trips_2021_09,
+                       trips_2021_08, trips_2021_07)
+```
+
+Checking the structure of the one-in-all dataframe which we created above under the variable **all_trips**.
+
+```{r message=FALSE, warning=FALSE}
+str(all_trips)
+```
+
+## 3. Cleaning our Dataframe
+
+### 3.1. Removing Irrelevant Columns
+
+First task first, dropping all the irrelevant columns, which for us is the start and end coordinates of the trip.
+
+```{r message=FALSE, warning=FALSE}
+# dropping non-relevant columns
+all_trips <- all_trips %>%  
+  select(-c(start_lat, start_lng, end_lat, end_lng))
+
+```
+
+### 3.2. Adding New Columns
+
+* Add columns that list the date, month, day, and year of each ride
+
+* Now, we shall add columns that list the date, month, day and year of each ride. This will allow us to aggregate ride data for each month, day or year.
+
+* Before completing these operations we could only aggregate at the ride level.
+
+```{r message=FALSE, warning=FALSE}
+all_trips$date <- as.Date(all_trips$started_at) #The default format is yyyy-mm-dd
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+```
+
+Now to get the duration a ride we will substract the end and start time and add a column **ride_length** for the same.
+
+```{r message=FALSE, warning=FALSE}
+all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
+```
+
+### 3.3. Delete Rows will Null Values
+
+Delete rows with NA values and where the ride duration came out to be negative.
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+all_trips_v2 <- na.omit(all_trips)
+all_trips_v2 <- all_trips_v2[!(all_trips_v2$ride_length < 0),]
+```
+
+### 3.4. Arranging Weekdays
+
+Arrange weekdays in serial order.
+
+```{r}
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, level = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+```
+
+
+## 4. Analysis Stage
+
+Descriptive analysis of ride length (sec).
+
+```{r message=FALSE, warning=FALSE}
+mean(abs(all_trips$ride_length)) #straight average (total ride length / rides)
+median(abs(all_trips$ride_length)) #midpoint number in the ascending array of ride lengths
+max(abs(all_trips$ride_length)) #longest ride
+min(abs(all_trips$ride_length)) #shortest ride
+```
+### 4.1. Type of Users
+
+```{r}
+# Make the plot
+ggplot(all_trips_v2, aes(x = member_casual, fill = member_casual)) +
+     geom_bar() +
+  labs(x = "Membership Type", y = "Ride Count", fill = "Membership Type", title = "Types of User", subtitle = "On the Basis of Membership Type") +
+  theme(axis.text.x = element_text(vjust = 0.5, hjust=1)) +
+  scale_y_continuous(labels = scales::comma)
+  
+```
+
+Clearly, there are two types of users where users with membership are more than casual riders by about *62,500*.
+
+### Ride Type Analysis
+
+```{r}
+ggplot(all_trips_v2, aes(x = rideable_type, fill = member_casual)) +
+  geom_bar(position = "dodge") +
+  labs(x = "Type of Cycle", y = "Ride Count", fill = "Membership Type", title = "Number of Ridetype", subtitle = "On the Basis of Membership Type") +
+  theme(axis.text.x = element_text(vjust = 0.5, hjust=1)) +
+  scale_y_continuous(labels = scales::comma)
+```
+
+Users ride *classic bike* more often than the other ride type. Docked Bike are only taken by *casual riders*.
+
+### Ride Analysis with Weekdays
+
+```{r}
+ggplot(all_trips_v2, aes(x = day_of_week, fill = member_casual)) +
+  geom_bar(position = "dodge") +
+  labs(x = "Weekdays", y = "Ride Count", title = "Number of Daily Riders", subtitle = "Weekdays - Membership Type", fill = "Membership Type") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_y_continuous(labels = scales::comma)
+```
+
+```{r message=FALSE, warning=FALSE}
+all_trips_v2 %>% 
+  group_by(member_casual, day_of_week) %>% 
+  summarize(number_of_rides = n(),
+            average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, day_of_week) %>% 
+  ggplot(aes(x = day_of_week, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(x = "Weekdays", y = "Average Ride Length (sec)", title = "Average Ride Duration", subtitle = "Weekdays - Membership Type", fill = "Membership Type") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+# Ride Analysis with Months
+
+```{r}
+ggplot(all_trips_v2, aes(x = month, fill = member_casual)) +
+  geom_bar(position = "dodge") +
+  labs(x = "Month Number", y = "Ride Count", title = "Number of Monthly Riders", subtitle = "Months - Membership Type", fill = "Membership Type") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_y_continuous(labels = scales::comma)
+```
+
+Number of riders increases in the month of *May to Oct*, i.e, in summer.
+
+```{r message=FALSE, warning=FALSE}
+all_trips_v2 %>% 
+  group_by(member_casual, month) %>% 
+  summarize(number_of_rides = n(),
+            average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, month) %>% 
+  ggplot(aes(x = month, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(x = "Month Number", y = "Average Ride Length (sec)", title = "Average Ride Duration", subtitle = "Months - Membership Type", fill = "Membership Type") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
